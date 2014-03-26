@@ -1,0 +1,102 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+sub add_package {
+	my ($list, $new) = @_;
+
+	push(@$list, {
+		name =>    $new->[0],
+		version => $new->[1],
+		arch =>    $new->[2],
+		repo =>    $new->[3],
+		vendor =>  $new->[4]
+	});
+}
+
+sub fetch_packages {
+	my $interactive = shift;
+	my @res;
+
+	my @cmd = qw(zypper);
+	push(@cmd, "--non-interactive") if !$interactive;
+	push(@cmd, qw(-vv install --download-only));
+	push(@cmd, @_);
+	pipe(READ, WRITE);
+	my $pid = fork();
+	if (!$pid) {
+		# child
+		close(READ);
+		open(STDOUT, ">&WRITE");
+		if (!$interactive) {
+			open(NULL, '<', "/dev/null");
+			open(STDIN, "<&NULL");
+			close(NULL);
+			open(NULL, '>', "/dev/null");
+			open(STDERR, ">&NULL");
+			close(NULL);
+		}
+		exec(@cmd);
+	}
+	# parent
+	close(WRITE);
+	my ($len, $buf, $last_line);
+	my ($state, @cur_pkg);
+	$state = 0;
+	$last_line = "";
+	STDOUT->autoflush(1);
+	while (($len = sysread(READ, $buf, 4096))) {
+		print $buf if $interactive;
+		next if $state == 2;
+		my @lines = split(/\n/, $buf, -1);
+		$lines[0] = $last_line . $lines[0];
+		# XXX: Assumes that the very last line is terminated by \n
+		$last_line = pop(@lines);
+		for my $l (@lines) {
+			if ($state == 0 && $l =~ /^The following(?: \d+)? NEW package.* going to be installed:/) {
+				$state = 1;
+				next;
+			}
+			next unless $state == 1;
+			if ($l eq "") {
+				$state = 2;
+				if (@cur_pkg) {
+					add_package(\@res, \@cur_pkg);
+				}
+				next;
+			}
+			$l =~ s/ *$//;
+			if ($l =~ /^[^ ]/) {
+				if (@cur_pkg) {
+					add_package(\@res, \@cur_pkg);
+				}
+				@cur_pkg = ($l);
+			}
+			if ($l =~ /^ /) {
+				$l =~ s/^ *//;
+				push(@cur_pkg, $l);
+			}
+		}
+	}
+	STDOUT->autoflush(0);
+	close(READ);
+	waitpid($pid, 0);
+	my $ret = $?;
+	return if $ret != 0;
+	return @res;
+}
+
+print "Fetching packages\n";
+my @packages = fetch_packages(0, @ARGV);
+if (!@packages) {
+	print "zypper returned an error, retrying in interactive mode\n";
+	@packages = fetch_packages(1, @ARGV);
+}
+use Data::Dumper;
+if (@packages) {
+	print Dumper(\@packages);
+} else {
+	exit 1;
+}
+
