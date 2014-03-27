@@ -175,7 +175,7 @@ sub find_fetched {
 		}
 		my $dir = get_repo_cache($p->{repo});
 		if (!$dir) {
-			print STDERR "Cannot find zypper cache for repository $p->{repo} (package $p->{name})\n";
+			print STDERR "Cannot find zypp cache for repository $p->{repo} (package $p->{name})\n";
 			next;
 		}
 		my $file = "$nvra.rpm";
@@ -184,7 +184,7 @@ sub find_fetched {
 		};
 		find($wanted, $dir);
 		if (!$p->{path}) {
-			print STDERR "Cannot find $file in zypper cache ($dir)\n";
+			print STDERR "Cannot find $file in zypp cache ($dir)\n";
 			next;
 		}
 	}
