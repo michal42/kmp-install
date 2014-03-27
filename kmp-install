@@ -19,6 +19,16 @@ sub add_package {
 	push(@$list, $new);
 }
 
+sub add_module {
+	my ($package, $path) = @_;
+
+	return unless $path =~ m@^/lib/modules/([^/]+)/.*/([^/]+\.ko)$@;
+	my ($version, $name) = ($1, $2);
+	$name =~ s/-/_/g;
+	$package->{modules} ||= [];
+	push(@{$package->{modules}}, "$version/$name");
+}
+
 sub query_installed_kmps {
 	my $res = shift;
 	my %seen;
@@ -32,9 +42,8 @@ sub query_installed_kmps {
 		if (!exists($seen{$nvra})) {
 			add_package($res, [$n, "$v-$r", $a]);
 			$seen{$nvra} = $res->[$#$res];
-			$seen{$nvra}->{files} = [];
 		}
-		push(@{$seen{$nvra}->{files}}, $file);
+		add_module($seen{$nvra}, $file);
 	}
 }
 
@@ -176,6 +185,15 @@ sub find_fetched {
 		if (!$p->{path}) {
 			print STDERR "Cannot find $file in zypper cache ($dir)\n";
 			next;
+		}
+	}
+	for my $p (@$packages) {
+		next unless $p->{path};
+		open(my $pipe, '-|', "rpm", "-qlp", $p->{path});
+		my @files = <$pipe>;
+		close($pipe);
+		for my $f (@files) {
+			add_module($p, $f);
 		}
 	}
 }
