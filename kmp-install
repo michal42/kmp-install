@@ -12,13 +12,32 @@ sub add_package {
 		name =>    $attr->[0],
 		version => $attr->[1],
 		arch =>    $attr->[2],
-		repo =>    $attr->[3],
-		vendor =>  $attr->[4]
 	};
+	$new->{repo} = $attr->[3] if defined($attr->[3]);
 	# old-version -> new-version
 	$new->{version} =~ s/.*->\s*//;
 	push(@$list, $new);
 }
+
+sub query_installed_kmps {
+	my $res = shift;
+	my %seen;
+
+	open(my $pipe, '-|', "rpm", "-qa", "--qf", '[%{n} %{v} %{r} %{arch} %{filenames}\n]', "*-kmp-*");
+	while (<$pipe>) {
+		chomp;
+		my ($n, $v, $r, $a, $file) = split(' ');
+		next unless $file =~ m@^/lib/modules/.*/.*/.*\.ko$@;
+		my $nvra = "$n-$v-$r.$a";
+		if (!exists($seen{$nvra})) {
+			add_package($res, [$n, "$v-$r", $a]);
+			$seen{$nvra} = $res->[$#$res];
+			$seen{$nvra}->{files} = [];
+		}
+		push(@{$seen{$nvra}->{files}}, $file);
+	}
+}
+
 
 sub fetch_packages {
 	my $interactive = shift;
@@ -169,9 +188,16 @@ for my $p (@new_pkgs) {
 		next;
 	}
 }
+
+my @installed;
+query_installed_kmps(\@installed);
+
 for my $p (@new_pkgs) {
 	print "$p->{path}\n" if $p->{path};
 }
 for my $p (@remove_pkgs) {
 	print "REMOVE: $p->{name}\n";
+}
+for my $p (@installed) {
+	print "INSTALLED: $p->{name}\n";
 }
