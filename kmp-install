@@ -5,6 +5,8 @@ use warnings;
 
 use File::Find;
 
+my @zypper_cmd = qw(zypper);
+
 sub add_package {
 	my ($list, $attr) = @_;
 
@@ -54,7 +56,7 @@ sub fetch_packages {
 	my $new_pkgs = shift;
 	my $remove_pkgs = shift;
 
-	my @cmd = qw(zypper);
+	my @cmd = @zypper_cmd;
 	push(@cmd, "--non-interactive") if !$interactive;
 	push(@cmd, qw(-vv install --download-only));
 	push(@cmd, @_);
@@ -204,6 +206,17 @@ sub verbose_system {
 	system(@_);
 }
 
+# treat -n, --non-interactive, -0 and --non-interactive-include-reboot-patches
+# as global zypper options
+my @save_argv = @ARGV;
+@ARGV=();
+for my $a (@save_argv) {
+	if ($a =~ /^-(n$|-non-interactive$|0$|-non-interactive-)/) {
+		push(@zypper_cmd, $a);
+	} else {
+		push(@ARGV, $a);
+	}
+}
 
 print "Fetching packages\n";
 my (@new_pkgs, @remove_pkgs, @installed_pkgs);
@@ -258,7 +271,8 @@ for my $p (@installed_pkgs) {
 
 # Remove conflicting packages
 if (@conflicting_pkgs) {
-	my @cmd = qw(zypper remove);
+	my @cmd = @zypper_cmd;
+	push(@cmd, "remove");
 	for my $p (@conflicting_pkgs) {
 		push(@cmd, "$p->{name}.$p->{arch}=$p->{version}");
 	}
@@ -268,7 +282,7 @@ if (@conflicting_pkgs) {
 }
 
 # Install new packages
-if (verbose_system("zypper", "install", @ARGV) != 0) {
+if (verbose_system(@zypper_cmd, "install", @ARGV) != 0) {
 	exit 1;
 }
 exit 0;
