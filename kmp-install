@@ -8,6 +8,7 @@ use File::Find;
 sub add_package {
 	my ($list, $attr) = @_;
 
+	return unless $attr->[0] =~ /-kmp-/;
 	my $new = {
 		name =>    $attr->[0],
 		version => $attr->[1],
