@@ -3,6 +3,8 @@
 use strict;
 use warnings;
 
+use File::Find;
+
 sub add_package {
 	my ($list, $attr) = @_;
 
@@ -90,16 +92,52 @@ sub fetch_packages {
 	return @res;
 }
 
+my %repo_cache;
+sub get_repo_cache {
+	my $name = shift;
+	my $res;
+
+	if (exists($repo_cache{$name})) {
+		return $repo_cache{$name};
+	}
+	open(my $pipe, '-|', "zypper", "repos", $name);
+	while (<$pipe>) {
+		chomp;
+		if (m@^MD Cache Path\s*:\s*(/.*)@) {
+			$res = $1;
+			$res =~ s:/raw/:/packages/:;
+			$res =~ s/\s*$//;
+		}
+	}
+	close($pipe);
+	$repo_cache{$name} = $res;
+	return $res;
+}
+
 print "Fetching packages\n";
 my @packages = fetch_packages(0, @ARGV);
 if (!@packages) {
 	print "zypper returned an error, retrying in interactive mode\n";
 	@packages = fetch_packages(1, @ARGV);
 }
-use Data::Dumper;
-if (@packages) {
-	print Dumper(\@packages);
-} else {
+if (!@packages) {
 	exit 1;
 }
-
+for my $p (@packages) {
+	my $dir = get_repo_cache($p->{repo});
+	if (!$dir) {
+		print STDERR "Cannot find zypper cache for repository $p->{repo} (package $p->{name})\n";
+		next;
+	}
+	my $file = "$p->{name}-$p->{version}.$p->{arch}.rpm";
+	my $path;
+	my $wanted = sub {
+		$path = $File::Find::name if $_ eq $file;
+	};
+	find($wanted, $dir);
+	if (!$path) {
+		print STDERR "Cannot find $file in zypper cache ($dir)\n";
+		next;
+	}
+	print "$path\n";
+}
