@@ -89,7 +89,7 @@ sub fetch_packages {
 		# XXX: Assumes that the very last line is terminated by \n
 		$last_line = pop(@lines);
 		for my $l (@lines) {
-			if ($state == 0 && $l =~ /^The following.* package.* going to be (installed|upgraded|REMOVED):/) {
+			if ($state == 0 && $l =~ /^The following.* package.* going to be (installed|upgraded|downgraded|REMOVED):/) {
 				if ($1 eq "REMOVED") {
 					$list = $remove_pkgs;
 				} else {
