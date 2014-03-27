@@ -53,7 +53,6 @@ sub fetch_packages {
 	STDOUT->autoflush(1);
 	while (($len = sysread(READ, $buf, 4096))) {
 		print $buf if $interactive;
-		next if $state == 2;
 		my @lines = split(/\n/, $buf, -1);
 		$lines[0] = $last_line . $lines[0];
 		# XXX: Assumes that the very last line is terminated by \n
@@ -65,10 +64,11 @@ sub fetch_packages {
 			}
 			next unless $state == 1;
 			if ($l eq "") {
-				$state = 2;
+				$state = 0;
 				if (@cur_pkg) {
 					add_package(\@res, \@cur_pkg);
 				}
+				@cur_pkg = ();
 				next;
 			}
 			$l =~ s/ *$//;
