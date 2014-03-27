@@ -32,6 +32,15 @@ use File::Find;
 
 my @zypper_cmd = qw(zypper);
 
+sub print_help {
+	print
+"Usage: $0 [options] <package> ...
+Installs given packages and removes any KMPs that contain conficting module
+names. Run 'zypper help install' for the list of valid options. Additionally,
+the options --non-interactive and --non-interactive-include-reboot-patches
+can be used\n";
+}
+
 sub add_package {
 	my ($list, $attr) = @_;
 
@@ -231,11 +240,18 @@ sub find_fetched {
 my @save_argv = @ARGV;
 @ARGV=();
 for my $a (@save_argv) {
-	if ($a =~ /^-(n$|-non-interactive$|0$|-non-interactive-)/) {
+	if ($a =~ /^-(h|-help)$/) {
+		print_help();
+		exit 0;
+	} elsif ($a =~ /^-(n$|-non-interactive$|0$|-non-interactive-)/) {
 		push(@zypper_cmd, $a);
 	} else {
 		push(@ARGV, $a);
 	}
+}
+if (!@ARGV) {
+	print_help();
+	exit 1;
 }
 
 print "Fetching packages\n";
