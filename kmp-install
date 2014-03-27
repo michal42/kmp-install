@@ -4,15 +4,18 @@ use strict;
 use warnings;
 
 sub add_package {
-	my ($list, $new) = @_;
+	my ($list, $attr) = @_;
 
-	push(@$list, {
-		name =>    $new->[0],
-		version => $new->[1],
-		arch =>    $new->[2],
-		repo =>    $new->[3],
-		vendor =>  $new->[4]
-	});
+	my $new = {
+		name =>    $attr->[0],
+		version => $attr->[1],
+		arch =>    $attr->[2],
+		repo =>    $attr->[3],
+		vendor =>  $attr->[4]
+	};
+	# old-version -> new-version
+	$new->{version} =~ s/.*->\s*//;
+	push(@$list, $new);
 }
 
 sub fetch_packages {
@@ -54,7 +57,7 @@ sub fetch_packages {
 		# XXX: Assumes that the very last line is terminated by \n
 		$last_line = pop(@lines);
 		for my $l (@lines) {
-			if ($state == 0 && $l =~ /^The following(?: \d+)? NEW package.* going to be installed:/) {
+			if ($state == 0 && $l =~ /^The following.* package.* going to be (installed|upgraded):/) {
 				$state = 1;
 				next;
 			}
