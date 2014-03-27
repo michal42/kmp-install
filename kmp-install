@@ -196,6 +196,24 @@ if ($ret != 0) {
 find_fetched(\@new_pkgs, @ARGV);
 query_installed_kmps(\@installed_pkgs);
 
+# Do not check packages to be updated/removed for module conflicts
+my (%new_pkgs, %remove_pkgs);
+for my $p (@remove_pkgs) {
+	my $nvra = "$p->{name}-$->{version}.$p->{arch}";
+	$remove_pkgs{$nvra} = 1;
+}
+for my $p (@new_pkgs) {
+	$new_pkgs{$p->{name}} = 1;
+}
+my @tmp = @installed_pkgs;
+@installed_pkgs = ();
+for my $p (@tmp) {
+	my $nvra = "$p->{name}-$->{version}.$p->{arch}";
+	next if $new_pkgs{$p->{name}} || $remove_pkgs{$nvra};
+	push(@installed_pkgs, $p);
+}
+
+
 for my $p (@new_pkgs) {
 	print "$p->{path}\n" if $p->{path};
 }
