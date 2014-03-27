@@ -199,6 +199,11 @@ sub find_fetched {
 	}
 }
 
+sub verbose_system {
+	print join(" ", "Running", @_), "\n";
+	system(@_);
+}
+
 
 print "Fetching packages\n";
 my (@new_pkgs, @remove_pkgs, @installed_pkgs);
@@ -232,13 +237,38 @@ for my $p (@tmp) {
 	push(@installed_pkgs, $p);
 }
 
-
+# check for conflicts
+my %new_modules;
 for my $p (@new_pkgs) {
-	print "$p->{path}\n" if $p->{path};
+	next unless $p->{modules};
+	for my $m (@{$p->{modules}}) {
+		$new_modules{$m} = $p->{name};
+	}
 }
-for my $p (@remove_pkgs) {
-	print "REMOVE: $p->{name}\n";
-}
+my @conflicting_pkgs;
 for my $p (@installed_pkgs) {
-	print "INSTALLED: $p->{name}\n";
+	next unless $p->{modules};
+	for my $m (@{$p->{modules}}) {
+		next unless exists($new_modules{$m});
+		print "Package $p->{name} conflicts with new package $new_modules{$m}\n";
+		push(@conflicting_pkgs, $p);
+		last;
+	}
 }
+
+# Remove conflicting packages
+if (@conflicting_pkgs) {
+	my @cmd = qw(zypper remove);
+	for my $p (@conflicting_pkgs) {
+		push(@cmd, "$p->{name}.$p->{arch}=$p->{version}");
+	}
+	if (verbose_system(@cmd) != 0) {
+		exit 1;
+	}
+}
+
+# Install new packages
+if (verbose_system("zypper", "install", @ARGV) != 0) {
+	exit 1;
+}
+exit 0;
