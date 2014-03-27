@@ -138,8 +138,51 @@ sub get_repo_cache {
 	return $res;
 }
 
+sub find_fetched {
+	my $packages = shift;
+	my %local_packages;
+
+	for $a (@_) {
+		if ($a =~ /\.rpm$/ && -e $a) {
+			open(my $pipe, '-|', "rpm", "-qp", "--qf",
+				'%{n}-%{v}-%{r}.%{arch}', $a);
+			my $nvra = <$pipe>;
+			close($pipe);
+			if (defined($nvra)) {
+				$local_packages{$nvra} = $a;
+			}
+		}
+	}
+	for my $p (@$packages) {
+		my $nvra = "$p->{name}-$p->{version}.$p->{arch}";
+		if ($p->{repo} eq "Plain RPM files cache") {
+			if (exists($local_packages{$nvra})) {
+				$p->{path} = $local_packages{$nvra};
+			} else {
+				print STDERR "Cannot find package $p->{name}\n";
+			}
+			next;
+		}
+		my $dir = get_repo_cache($p->{repo});
+		if (!$dir) {
+			print STDERR "Cannot find zypper cache for repository $p->{repo} (package $p->{name})\n";
+			next;
+		}
+		my $file = "$nvra.rpm";
+		my $wanted = sub {
+			$p->{path} = $File::Find::name if $_ eq $file;
+		};
+		find($wanted, $dir);
+		if (!$p->{path}) {
+			print STDERR "Cannot find $file in zypper cache ($dir)\n";
+			next;
+		}
+	}
+}
+
+
 print "Fetching packages\n";
-my (@new_pkgs, @remove_pkgs);
+my (@new_pkgs, @remove_pkgs, @installed_pkgs);
 my $ret = fetch_packages(0, \@new_pkgs, \@remove_pkgs, @ARGV);
 if ($ret != 0) {
 	print "zypper returned an error, retrying in interactive mode\n";
@@ -150,47 +193,8 @@ if ($ret != 0) {
 if ($ret != 0) {
 	exit 1;
 }
-my %local_packages;
-for $a (@ARGV) {
-	if ($a =~ /\.rpm$/ && -e $a) {
-		open(my $pipe, '-|', "rpm", "-qp", "--qf",
-			'%{n}-%{v}-%{r}.%{arch}', $a);
-		my $nvra = <$pipe>;
-		close($pipe);
-		if (defined($nvra)) {
-			$local_packages{$nvra} = $a;
-		}
-	}
-}
-
-for my $p (@new_pkgs) {
-	my $nvra = "$p->{name}-$p->{version}.$p->{arch}";
-	if ($p->{repo} eq "Plain RPM files cache") {
-		if (exists($local_packages{$nvra})) {
-			$p->{path} = $local_packages{$nvra};
-		} else {
-			print STDERR "Cannot find package $p->{name}\n";
-		}
-		next;
-	}
-	my $dir = get_repo_cache($p->{repo});
-	if (!$dir) {
-		print STDERR "Cannot find zypper cache for repository $p->{repo} (package $p->{name})\n";
-		next;
-	}
-	my $file = "$nvra.rpm";
-	my $wanted = sub {
-		$p->{path} = $File::Find::name if $_ eq $file;
-	};
-	find($wanted, $dir);
-	if (!$p->{path}) {
-		print STDERR "Cannot find $file in zypper cache ($dir)\n";
-		next;
-	}
-}
-
-my @installed;
-query_installed_kmps(\@installed);
+find_fetched(\@new_pkgs, @ARGV);
+query_installed_kmps(\@installed_pkgs);
 
 for my $p (@new_pkgs) {
 	print "$p->{path}\n" if $p->{path};
@@ -198,6 +202,6 @@ for my $p (@new_pkgs) {
 for my $p (@remove_pkgs) {
 	print "REMOVE: $p->{name}\n";
 }
-for my $p (@installed) {
+for my $p (@installed_pkgs) {
 	print "INSTALLED: $p->{name}\n";
 }
