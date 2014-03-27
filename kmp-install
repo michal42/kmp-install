@@ -201,11 +201,6 @@ sub find_fetched {
 	}
 }
 
-sub verbose_system {
-	print join(" ", "Running", @_), "\n";
-	system(@_);
-}
-
 # treat -n, --non-interactive, -0 and --non-interactive-include-reboot-patches
 # as global zypper options
 my @save_argv = @ARGV;
@@ -269,20 +264,13 @@ for my $p (@installed_pkgs) {
 	}
 }
 
-# Remove conflicting packages
-if (@conflicting_pkgs) {
-	my @cmd = @zypper_cmd;
-	push(@cmd, "remove");
-	for my $p (@conflicting_pkgs) {
-		push(@cmd, "$p->{name}.$p->{arch}=$p->{version}");
-	}
-	if (verbose_system(@cmd) != 0) {
-		exit 1;
-	}
+# Install new packages, removing conflicting installed packages
+my @cmd = (@zypper_cmd, "install", @ARGV);
+for my $p (@conflicting_pkgs) {
+	push(@cmd, "!$p->{name}.$p->{arch}=$p->{version}");
 }
-
-# Install new packages
-if (verbose_system(@zypper_cmd, "install", @ARGV) != 0) {
+print join(" ", "Running", @cmd), "\n";
+if (system(@cmd) != 0) {
 	exit 1;
 }
 exit 0;
