@@ -123,21 +123,44 @@ if (!@packages) {
 if (!@packages) {
 	exit 1;
 }
+my %local_packages;
+for $a (@ARGV) {
+	if ($a =~ /\.rpm$/ && -e $a) {
+		open(my $pipe, '-|', "rpm", "-qp", "--qf",
+			'%{n}-%{v}-%{r}.%{arch}', $a);
+		my $nvra = <$pipe>;
+		close($pipe);
+		if (defined($nvra)) {
+			$local_packages{$nvra} = $a;
+		}
+	}
+}
+
 for my $p (@packages) {
+	my $nvra = "$p->{name}-$p->{version}.$p->{arch}";
+	if ($p->{repo} eq "Plain RPM files cache") {
+		if (exists($local_packages{$nvra})) {
+			$p->{path} = $local_packages{$nvra};
+		} else {
+			print STDERR "Cannot find package $p->{name}\n";
+		}
+		next;
+	}
 	my $dir = get_repo_cache($p->{repo});
 	if (!$dir) {
 		print STDERR "Cannot find zypper cache for repository $p->{repo} (package $p->{name})\n";
 		next;
 	}
-	my $file = "$p->{name}-$p->{version}.$p->{arch}.rpm";
-	my $path;
+	my $file = "$nvra.rpm";
 	my $wanted = sub {
-		$path = $File::Find::name if $_ eq $file;
+		$p->{path} = $File::Find::name if $_ eq $file;
 	};
 	find($wanted, $dir);
-	if (!$path) {
+	if (!$p->{path}) {
 		print STDERR "Cannot find $file in zypper cache ($dir)\n";
 		next;
 	}
-	print "$path\n";
+}
+for my $p (@packages) {
+	print "$p->{path}\n" if $p->{path};
 }
